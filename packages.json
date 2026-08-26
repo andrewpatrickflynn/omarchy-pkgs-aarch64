@@ -28,7 +28,7 @@
     { "name": "omarchy-emacs",                     "pkgbase": "omarchy-emacs",                     "source": "aur",           "category": "any",     "note": "AUR leads omarchy-pkgs here (1.10.1 vs 1.9.1) — do not switch the source" },
     { "name": "omarchy-webapp-theme",              "pkgbase": "omarchy-webapp-theme",              "source": "aur",           "category": "any" },
     { "name": "omawrite",                          "pkgbase": "omawrite",                          "source": "omarchy-pkgs",  "category": "compile" },
-    { "name": "openai-codex-desktop",              "pkgbase": "openai-codex-desktop",              "source": "omarchy-pkgs",  "category": "repack",  "note": "not in the AUR; repacks a vendor .deb with source_aarch64" },
+    { "name": "openai-codex-desktop",              "pkgbase": "openai-codex-desktop",              "source": "omarchy-pkgs",  "category": "repack",  "allow_foreign_elf": ["*/prebuilds/*"], "note": "not in the AUR; repacks a vendor .deb with source_aarch64. The arm64 deb bundles Node native-module prebuilds for every platform, so 8 x86 objects under */prebuilds/* are expected; the aarch64 ones sit beside them." },
     { "name": "tensaku",                           "pkgbase": "tensaku",                           "source": "aur",           "category": "compile", "ignorearch": true, "note": "AUR declares arch=('x86_64') only" },
     { "name": "ttf-ia-writer",                     "pkgbase": "ttf-ia-writer",                     "source": "aur",           "category": "any" },
     { "name": "ttfx",                              "pkgbase": "ttfx",                              "source": "omarchy-pkgs",  "category": "compile" },

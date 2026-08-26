@@ -120,7 +120,8 @@ matrix="$(jq -c --slurpfile scope <(cat "$work/scope.json") \
       category: .[0].category,
       pkgnames: (map(.name) | join(",")),
       ignorearch: (map(.ignorearch // false) | any),
-      extra_makedepends: (map(.extra_makedepends // []) | add | unique | join(","))
+      extra_makedepends: (map(.extra_makedepends // []) | add | unique | join(",")),
+      allow_foreign_elf: (map(.allow_foreign_elf // []) | add | unique | join(","))
     }
     # Every build runs in an aarch64 container, so every build wants a native
     # aarch64 runner. ubuntu-24.04-arm is free for public repos, which makes

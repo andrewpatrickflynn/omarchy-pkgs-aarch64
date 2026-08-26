@@ -95,11 +95,12 @@ jobs:
           PKGNAMES: ${{ matrix.pkgnames }}
           IGNOREARCH: ${{ matrix.ignorearch }}
           EXTRA_MAKEDEPENDS: ${{ matrix.extra_makedepends }}
+          ALLOW_FOREIGN_ELF: ${{ matrix.allow_foreign_elf }}
         run: |
           mkdir -p staging
           docker run --rm -v "$PWD:/w" -w /w \
             -e PKGBASE -e SOURCE -e CATEGORY -e PKGNAMES -e IGNOREARCH \
-            -e EXTRA_MAKEDEPENDS \
+            -e EXTRA_MAKEDEPENDS -e ALLOW_FOREIGN_ELF \
             -e OUTDIR=/w/staging \
             "$ARCH_IMAGE_ARM" bash -c \
             'bash scripts/container-bootstrap.sh build >/dev/null && bash scripts/build-package.sh'

@@ -29,6 +29,7 @@ source scripts/common.sh
 : "${PKGBASE:?}" "${SOURCE:?}" "${CATEGORY:?}" "${PKGNAMES:?}" "${OUTDIR:?}"
 IGNOREARCH="${IGNOREARCH:-false}"
 EXTRA_MAKEDEPENDS="${EXTRA_MAKEDEPENDS:-}"
+ALLOW_FOREIGN_ELF="${ALLOW_FOREIGN_ELF:-}"
 
 case "$CATEGORY" in
   any)    want_arch=any ;;
@@ -174,8 +175,23 @@ elf_machine() {
   printf '%s' "$(( lo + hi * 256 ))"
 }
 
+# Vendors bundle native modules for every platform they support. Those are
+# expected and unused here, but the allowance is a path glob rather than a
+# blanket exemption, so an x86 binary somewhere that matters still fails.
+elf_allowed() {
+  local rel="$1" pat pats
+  [[ -n "$ALLOW_FOREIGN_ELF" ]] || return 1
+  IFS=',' read -r -a pats <<< "$ALLOW_FOREIGN_ELF"
+  for pat in "${pats[@]}"; do
+    [[ -n "$pat" ]] || continue
+    # shellcheck disable=SC2053  # glob match is the point
+    [[ "$rel" == $pat ]] && return 0
+  done
+  return 1
+}
+
 audit_elf() {
-  local pkg="$1" tmp list arm=0 x86=0 other=0 m
+  local pkg="$1" tmp list arm=0 x86=0 other=0 allowed=0 m rel
   tmp="$(mktemp -d)"; list="$tmp.list"
   bsdtar -xf "$pkg" -C "$tmp" 2>/dev/null || die "could not extract $pkg"
 
@@ -188,14 +204,19 @@ audit_elf() {
     m="$(elf_machine "$f")" || continue
     case "$m" in
       183) arm=$((arm + 1)) ;;        # EM_AARCH64
-      62|3) x86=$((x86 + 1))          # EM_X86_64, EM_386
-            warn "  x86 object: ${f#"$tmp"}" ;;
+      62|3)                             # EM_X86_64, EM_386
+            rel="${f#"$tmp"}"
+            if elf_allowed "$rel"; then
+              allowed=$((allowed + 1))
+            else
+              x86=$((x86 + 1)); warn "  x86 object: $rel"
+            fi ;;
       *) other=$((other + 1)) ;;      # EM_ARM (40) and friends: not our problem
     esac
   done < "$list"
   rm -rf "$tmp" "$list"
 
-  log "  ELF audit: $arm aarch64, $x86 x86, $other other-arch"
+  log "  ELF audit: $arm aarch64, $x86 x86, $other other-arch, $allowed allowed-foreign"
   (( x86 == 0 )) || die "$pkg carries $x86 x86 ELF object(s) — this is not an aarch64 build"
   (( arm > 0 ))  || die "$pkg contains no aarch64 ELF objects — expected a prebuilt ARM payload"
 }
