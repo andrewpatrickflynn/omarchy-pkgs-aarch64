@@ -94,10 +94,12 @@ jobs:
           CATEGORY: ${{ matrix.category }}
           PKGNAMES: ${{ matrix.pkgnames }}
           IGNOREARCH: ${{ matrix.ignorearch }}
+          EXTRA_MAKEDEPENDS: ${{ matrix.extra_makedepends }}
         run: |
           mkdir -p staging
           docker run --rm -v "$PWD:/w" -w /w \
             -e PKGBASE -e SOURCE -e CATEGORY -e PKGNAMES -e IGNOREARCH \
+            -e EXTRA_MAKEDEPENDS \
             -e OUTDIR=/w/staging \
             "$ARCH_IMAGE_ARM" bash -c \
             'bash scripts/container-bootstrap.sh build >/dev/null && bash scripts/build-package.sh'

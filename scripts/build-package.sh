@@ -28,6 +28,7 @@ source scripts/common.sh
 
 : "${PKGBASE:?}" "${SOURCE:?}" "${CATEGORY:?}" "${PKGNAMES:?}" "${OUTDIR:?}"
 IGNOREARCH="${IGNOREARCH:-false}"
+EXTRA_MAKEDEPENDS="${EXTRA_MAKEDEPENDS:-}"
 
 case "$CATEGORY" in
   any)    want_arch=any ;;
@@ -112,8 +113,13 @@ srcinfo="$work/.SRCINFO"
   || die "could not parse PKGBUILD for $PKGBASE"
 
 mapfile -t deps < <(
-  sed -nE 's/^[[:space:]]*(make|check)depends(_[[:alnum:]_]+)?[[:space:]]*=[[:space:]]*(.+)/\3/p' "$srcinfo" \
-    | sed -E 's/[<>=].*$//' | tr -d ' ' | sort -u
+  {
+    sed -nE 's/^[[:space:]]*(make|check)depends(_[[:alnum:]_]+)?[[:space:]]*=[[:space:]]*(.+)/\3/p' "$srcinfo" \
+      | sed -E 's/[<>=].*$//' | tr -d ' '
+    # Some PKGBUILDs call tooling they never declare — yaru's build() uses
+    # arch-meson, which ships in devtools. packages.json records those.
+    [[ -n "$EXTRA_MAKEDEPENDS" ]] && tr ',' '\n' <<< "$EXTRA_MAKEDEPENDS"
+  } | sed '/^$/d' | sort -u
 )
 if ((${#deps[@]})); then
   log "Installing build deps: ${deps[*]}"
@@ -152,28 +158,46 @@ artifact_pkgname() {
   printf '%s' "$name"
 }
 
-# Refuse to ship an x86 payload under an aarch64 filename. This is the check
-# that would catch a silently-ignored CARCH override.
+# The failure this guards against is shipping an x86 payload under an aarch64
+# filename. It deliberately does NOT demand that every ELF be aarch64: the
+# openai-codex-desktop Electron bundle legitimately carries 32-bit ARM
+# libraries, and rejecting those is a false positive.
+#
+# e_machine is read straight out of the ELF header rather than matched against
+# file(1)'s prose, which spells the same architecture several ways ("x86-64",
+# "Intel 80386", "Intel i386").
+elf_machine() {
+  local bytes lo hi
+  bytes="$(od -An -tu1 -j18 -N2 -- "$1" 2>/dev/null)" || return 1
+  read -r lo hi <<< "$bytes"
+  [[ -n "$lo" && -n "$hi" ]] || return 1
+  printf '%s' "$(( lo + hi * 256 ))"
+}
+
 audit_elf() {
-  local pkg="$1" tmp types total arm foreign
-  tmp="$(mktemp -d)"; types="$tmp.types"
+  local pkg="$1" tmp list arm=0 x86=0 other=0 m
+  tmp="$(mktemp -d)"; list="$tmp.list"
   bsdtar -xf "$pkg" -C "$tmp" 2>/dev/null || die "could not extract $pkg"
-  command find "$tmp" -type f -print0 | xargs -0 -r file -b -- 2>/dev/null \
-    | command grep '^ELF' > "$types" || true
-  total="$(wc -l < "$types" | tr -d ' ')"
-  arm="$(command grep -c 'aarch64' "$types" || true)"
-  foreign=$(( total - arm ))
-  log "  ELF audit: $total ELF object(s), $arm aarch64, $foreign other"
-  if (( foreign > 0 )); then
-    warn "non-aarch64 ELF objects found:"
-    command grep -v 'aarch64' "$types" | sort -u | head -5 >&2
-    rm -rf "$tmp" "$types"
-    die "$pkg carries $foreign non-aarch64 ELF object(s) — the CARCH override did not take"
-  fi
-  rm -rf "$tmp" "$types"
-  # Whitelisting arch strings would silently pass an unrecognised one; instead
-  # require that every ELF present is aarch64 and that at least one exists.
-  (( arm > 0 )) || die "$pkg contains no aarch64 ELF objects — expected a prebuilt ARM payload"
+
+  # One batched file(1) call to find the ELF objects, then read each header.
+  command find "$tmp" -type f -print0 | xargs -0 -r file -N -- 2>/dev/null \
+    | sed -n 's/^\(.*\): ELF .*/\1/p' > "$list" || true
+
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    m="$(elf_machine "$f")" || continue
+    case "$m" in
+      183) arm=$((arm + 1)) ;;        # EM_AARCH64
+      62|3) x86=$((x86 + 1))          # EM_X86_64, EM_386
+            warn "  x86 object: ${f#"$tmp"}" ;;
+      *) other=$((other + 1)) ;;      # EM_ARM (40) and friends: not our problem
+    esac
+  done < "$list"
+  rm -rf "$tmp" "$list"
+
+  log "  ELF audit: $arm aarch64, $x86 x86, $other other-arch"
+  (( x86 == 0 )) || die "$pkg carries $x86 x86 ELF object(s) — this is not an aarch64 build"
+  (( arm > 0 ))  || die "$pkg contains no aarch64 ELF objects — expected a prebuilt ARM payload"
 }
 
 kept=0
@@ -191,7 +215,12 @@ for name in "${wanted[@]}"; do
   log "Keeping $base"
   [[ "$CATEGORY" == "repack" ]] && audit_elf "$found"
 
-  cp "$found" "$OUTDIR/"
+  # An epoch puts a ':' in the filename, which neither a GitHub release asset
+  # nor an actions/upload-artifact path can contain. Rename here so the name is
+  # already safe by the time repo-add records it as %FILENAME%.
+  safe="$(sanitize_asset_name "$base")"
+  [[ "$safe" == "$base" ]] || log "  staging as $safe (':' cannot survive an upload)"
+  cp "$found" "$OUTDIR/$safe"
   kept=$((kept + 1))
 done
 

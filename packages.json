@@ -35,6 +35,6 @@
     { "name": "tzupdate",                          "pkgbase": "tzupdate",                          "source": "aur",           "category": "compile", "ignorearch": true, "note": "AUR declares arch=('x86_64') only" },
     { "name": "ufw-docker",                        "pkgbase": "ufw-docker",                        "source": "aur",           "category": "any" },
     { "name": "xdg-terminal-exec",                 "pkgbase": "xdg-terminal-exec",                 "source": "aur",           "category": "any" },
-    { "name": "yaru-icon-theme",                   "pkgbase": "yaru",                              "source": "aur",           "category": "any",     "note": "split pkgbase building 9 subpackages; only yaru-icon-theme is published" }
+    { "name": "yaru-icon-theme",                   "pkgbase": "yaru",                              "source": "aur",           "category": "any",     "extra_makedepends": ["devtools"], "note": "split pkgbase building 9 subpackages; only yaru-icon-theme is published. Its build() calls arch-meson, which ships in devtools and is not in its declared makedepends." }
   ]
 }
