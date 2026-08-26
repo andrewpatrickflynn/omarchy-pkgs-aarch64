@@ -81,10 +81,58 @@ Assets live on a single rolling `edge` tag and are replaced in place, so the
   own `pacman.conf` uses for its repo. If you'd rather not trust unsigned
   packages, build them yourself: the Omarchy ones with the command below, the
   AUR ones with `makepkg` from their PKGBUILD.
-- **Rebuilt by hand.** There's no CI. Versions here drift behind upstream until
-  someone rebuilds. Check the table above against the package's own upstream
-  (`pkgs.omarchy.org/edge/x86_64` for Omarchy's, the AUR for the rest) if a
-  version matters to you.
+- **Partly automated.** A scheduled workflow refreshes the
+  architecture-independent packages and the prebuilt-ARM repacks. The packages
+  that compile from source are still rebuilt by hand and can drift behind
+  upstream — see [Automation](#automation) for which is which.
+
+## Automation
+
+[`.github/workflows/update-packages.yml`](.github/workflows/update-packages.yml)
+runs every six hours. It compares each package's upstream version against the
+version in the published db and rebuilds only what moved, so a typical run does
+nothing. It never publishes a version older than the one already in the repo,
+which is what would make `pacman -Syu` offer you a downgrade.
+
+The packages differ only in where they can be built:
+
+| Group | Count | Built on |
+|-------|-------|----------|
+| `any` — `arch=('any')`, architecture-independent | 6 | free x86 runner, emulated aarch64 container |
+| `repack` — ships a vendor-prebuilt ARM binary | 7 | free x86 runner, emulated aarch64 container |
+| `compile` — built from source | 12 | still manual; needs a native ARM runner |
+
+[`packages.json`](packages.json) records which group each package belongs to and
+where its PKGBUILD comes from — the AUR for most, `omacom-io/omarchy-pkgs` for
+the five that aren't in the AUR. The source is per-package on purpose: for
+`omarchy-emacs` the AUR leads Omarchy's own repo, so switching it would be a
+downgrade.
+
+Every build runs inside an aarch64 container, so the target architecture is real
+rather than assumed. Forcing `CARCH=aarch64` inside an x86 container looks like
+it ought to work for the repacks — they only unpack a binary someone else
+built — but several of those PKGBUILDs execute the ARM binary while packaging
+it. `mise-bin` generates its shell completions that way.
+
+Publishing is ordered so the repo is never internally inconsistent: package
+assets upload first, then the four db files with `.db` last, and only then are
+superseded package assets deleted. A package whose version carries an epoch is
+renamed before `repo-add` sees it, because a GitHub release asset cannot contain
+a `:` — the db records `1:1.93.138-1` as the version but
+`brave-origin-bin-1.1.93.138-1-aarch64.pkg.tar.xz` as the filename.
+
+Running it by hand:
+
+```bash
+gh workflow run update-packages.yml                        # everything in scope
+gh workflow run update-packages.yml -f packages=mise-bin   # one package
+gh workflow run update-packages.yml -f dry_run=true        # build, verify, publish nothing
+```
+
+The scripts under [`scripts/`](scripts) are plain bash and run outside CI too.
+`scripts/smoke-test.sh` is the useful one on its own: it syncs the published repo
+the way pacman does and checks that every package the db advertises is actually
+fetchable.
 
 ## Building these yourself
 

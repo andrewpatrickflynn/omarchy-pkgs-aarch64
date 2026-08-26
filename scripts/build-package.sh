@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+# Build one pkgbase and stage the wanted artifacts into OUTDIR.
+#
+#   PKGBASE=mise-bin SOURCE=aur CATEGORY=repack PKGNAMES=mise-bin \
+#     OUTDIR=./staging scripts/build-package.sh
+#
+# Env:
+#   PKGBASE     pkgbase to build
+#   SOURCE      aur | omarchy-pkgs
+#   CATEGORY    any | repack
+#   PKGNAMES    comma-separated pkgnames to keep (a split pkgbase builds more)
+#   OUTDIR      where to stage the kept artifacts
+#   IGNOREARCH  true to pass --ignorearch (for PKGBUILDs missing aarch64)
+#
+# This must run inside an aarch64 environment. On a native ARM runner that is
+# free; on an x86 runner it is an emulated aarch64 container (binfmt + qemu).
+#
+# An earlier design forced CARCH=aarch64 inside an x86 container instead, on
+# the theory that 'repack' PKGBUILDs only extract a vendor-prebuilt ARM binary.
+# That is false: mise-bin's package() runs the ARM `mise` three times to
+# generate shell completions, and any upstream PKGBUILD may start doing the
+# same at any time. Emulating the target arch is the only version of this that
+# does not silently rot.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+source scripts/common.sh
+
+: "${PKGBASE:?}" "${SOURCE:?}" "${CATEGORY:?}" "${PKGNAMES:?}" "${OUTDIR:?}"
+IGNOREARCH="${IGNOREARCH:-false}"
+
+case "$CATEGORY" in
+  any)    want_arch=any ;;
+  repack) want_arch=aarch64 ;;
+  *) die "category '$CATEGORY' is not buildable on x86; it needs a native ARM runner" ;;
+esac
+
+OUTDIR="$(mkdir -p "$OUTDIR" && cd "$OUTDIR" && pwd)"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+mkdir -p "$work/out" "$work/srcdest"
+
+# makepkg refuses to run as root. In a container we start as root, so make an
+# unprivileged builder and hand it the tree.
+if [[ "$(id -u)" -eq 0 ]]; then
+  id -u builder &>/dev/null || useradd -m builder
+  as_builder() { runuser -u builder -- "$@"; }
+else
+  as_builder() { "$@"; }
+fi
+
+# pacman 7 sandboxes its downloader with Landlock, which qemu-user does not
+# implement, so a plain -Sy dies inside an emulated container. Retry rather
+# than disable unconditionally, so a native ARM runner keeps the sandbox.
+pacman_install() {
+  pacman -Sy --noconfirm --needed --asdeps "$@" && return 0
+  warn "pacman -Sy failed; retrying with --disable-sandbox (expected under emulation)"
+  pacman -Sy --noconfirm --needed --asdeps --disable-sandbox "$@"
+}
+
+# --- fetch the PKGBUILD -----------------------------------------------------
+src="$work/src"
+case "$SOURCE" in
+  aur)
+    log "Cloning AUR pkgbase '$PKGBASE'"
+    git clone --depth 1 "https://aur.archlinux.org/$PKGBASE.git" "$src" \
+      || die "could not clone AUR pkgbase '$PKGBASE'"
+    ;;
+  omarchy-pkgs)
+    log "Sparse-checking out $OMARCHY_PKGS_REPO pkgbuilds/$PKGBASE"
+    # Whole directory, not just the PKGBUILD: several of these carry local
+    # source files (launcher scripts, .install hooks) alongside it.
+    git clone --depth 1 --filter=blob:none --sparse \
+      "https://github.com/$OMARCHY_PKGS_REPO.git" "$work/oma" \
+      || die "could not clone $OMARCHY_PKGS_REPO"
+    git -C "$work/oma" sparse-checkout set "pkgbuilds/$PKGBASE" \
+      || die "no pkgbuilds/$PKGBASE in $OMARCHY_PKGS_REPO"
+    [[ -f "$work/oma/pkgbuilds/$PKGBASE/PKGBUILD" ]] \
+      || die "no PKGBUILD at pkgbuilds/$PKGBASE"
+    mv "$work/oma/pkgbuilds/$PKGBASE" "$src"
+    ;;
+  *) die "unknown source '$SOURCE'" ;;
+esac
+
+# --- makepkg.conf -----------------------------------------------------------
+conf="$work/makepkg.conf"
+cp /etc/makepkg.conf "$conf"
+{
+  echo ""
+  echo "# --- overrides written by scripts/build-package.sh ---"
+  # Pinned so the repo stays homogeneous; every existing asset is .pkg.tar.xz.
+  echo "PKGEXT='$PKGEXT_WANTED'"
+  echo "SRCEXT='.src.tar.gz'"
+  echo "PKGDEST='$work/out'"
+  echo "SRCDEST='$work/srcdest'"
+} >> "$conf"
+
+# Fail loudly rather than quietly producing an x86 package with an aarch64
+# name. This is cheap and catches a missing binfmt registration immediately.
+host_arch="$(uname -m)"
+[[ "$host_arch" == "aarch64" ]] \
+  || die "must build on aarch64 (native or emulated); this is $host_arch. On an x86 runner, register binfmt and run inside an aarch64 container."
+log "PKGEXT=$PKGEXT_WANTED, build arch=$host_arch, target arch=$want_arch"
+
+chown -R builder: "$work" 2>/dev/null || true
+
+# --- makedepends ------------------------------------------------------------
+# --printsrcinfo expands arch-specific arrays for us. It sources the PKGBUILD,
+# which is the same trust boundary as building it.
+srcinfo="$work/.SRCINFO"
+( cd "$src" && as_builder makepkg --config "$conf" --printsrcinfo ) > "$srcinfo" \
+  || die "could not parse PKGBUILD for $PKGBASE"
+
+mapfile -t deps < <(
+  sed -nE 's/^[[:space:]]*(make|check)depends(_[[:alnum:]_]+)?[[:space:]]*=[[:space:]]*(.+)/\3/p' "$srcinfo" \
+    | sed -E 's/[<>=].*$//' | tr -d ' ' | sort -u
+)
+if ((${#deps[@]})); then
+  log "Installing build deps: ${deps[*]}"
+  if [[ "$(id -u)" -eq 0 ]]; then
+    pacman_install "${deps[@]}" || die "could not install build deps: ${deps[*]}"
+  else
+    warn "not root; assuming build deps are present: ${deps[*]}"
+  fi
+else
+  log "No build deps declared"
+fi
+
+# --- build ------------------------------------------------------------------
+# --nodeps: runtime depends are irrelevant to producing the artifact, and for
+# repack builds they are aarch64 packages an x86 runner could not install.
+# --nocheck: test suites want checkdepends and a native target.
+mkflags=(--config "$conf" --nodeps --nocheck --noconfirm --force --clean)
+[[ "$IGNOREARCH" == "true" ]] && mkflags+=(--ignorearch)
+log "Building $PKGBASE"
+( cd "$src" && as_builder makepkg "${mkflags[@]}" ) || die "makepkg failed for $PKGBASE"
+
+# --- collect and verify -----------------------------------------------------
+shopt -s nullglob
+built=("$work/out"/*"$PKGEXT_WANTED")
+((${#built[@]})) || die "$PKGBASE produced no $PKGEXT_WANTED artifact"
+log "Built ${#built[@]} artifact(s): $(printf '%s ' "${built[@]##*/}")"
+
+artifact_pkgname() { basename "$1" "$PKGEXT_WANTED" | rev | cut -d- -f4- | rev; }
+
+# Refuse to ship an x86 payload under an aarch64 filename. This is the check
+# that would catch a silently-ignored CARCH override.
+audit_elf() {
+  local pkg="$1" tmp types total arm foreign
+  tmp="$(mktemp -d)"; types="$tmp.types"
+  bsdtar -xf "$pkg" -C "$tmp" 2>/dev/null || die "could not extract $pkg"
+  command find "$tmp" -type f -print0 | xargs -0 -r file -b -- 2>/dev/null \
+    | command grep '^ELF' > "$types" || true
+  total="$(wc -l < "$types" | tr -d ' ')"
+  arm="$(command grep -c 'aarch64' "$types" || true)"
+  foreign=$(( total - arm ))
+  log "  ELF audit: $total ELF object(s), $arm aarch64, $foreign other"
+  if (( foreign > 0 )); then
+    warn "non-aarch64 ELF objects found:"
+    command grep -v 'aarch64' "$types" | sort -u | head -5 >&2
+    rm -rf "$tmp" "$types"
+    die "$pkg carries $foreign non-aarch64 ELF object(s) — the CARCH override did not take"
+  fi
+  rm -rf "$tmp" "$types"
+  # Whitelisting arch strings would silently pass an unrecognised one; instead
+  # require that every ELF present is aarch64 and that at least one exists.
+  (( arm > 0 )) || die "$pkg contains no aarch64 ELF objects — expected a prebuilt ARM payload"
+}
+
+kept=0
+IFS=',' read -r -a wanted <<< "$PKGNAMES"
+for name in "${wanted[@]}"; do
+  found=""
+  for pkg in "${built[@]}"; do
+    [[ "$(artifact_pkgname "$pkg")" == "$name" ]] && { found="$pkg"; break; }
+  done
+  [[ -n "$found" ]] || die "$PKGBASE did not produce an artifact for '$name'"
+
+  base="$(basename "$found")"
+  [[ "$base" == *"-$want_arch$PKGEXT_WANTED" ]] \
+    || die "$base is not a '-$want_arch$PKGEXT_WANTED' artifact"
+  log "Keeping $base"
+  [[ "$CATEGORY" == "repack" ]] && audit_elf "$found"
+
+  cp "$found" "$OUTDIR/"
+  kept=$((kept + 1))
+done
+
+log "Staged $kept artifact(s) in $OUTDIR"

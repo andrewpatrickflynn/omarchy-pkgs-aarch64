@@ -1,0 +1,40 @@
+{
+  "repo": {
+    "db": "omarchy-aarch64",
+    "tag": "edge",
+    "pkgext": ".pkg.tar.xz",
+    "omarchy_pkgs_repo": "omacom-io/omarchy-pkgs"
+  },
+  "categories": {
+    "any": "arch=('any') — the artifact is architecture-independent, so an x86 runner may build and republish it as-is.",
+    "repack": "Ships a vendor-prebuilt aarch64 binary. package() only extracts and installs, never executes target code, so an x86 runner can build it with CARCH=aarch64.",
+    "compile": "Compiled from source, or extraction requires executing an aarch64 binary. Needs a native ARM runner."
+  },
+  "packages": [
+    { "name": "aether",                            "pkgbase": "aether",                            "source": "aur",           "category": "compile" },
+    { "name": "brave-origin-bin",                  "pkgbase": "brave-origin-bin",                  "source": "aur",           "category": "repack",  "note": "epoch 1: — filename is sanitized on upload" },
+    { "name": "cliamp",                            "pkgbase": "cliamp",                            "source": "aur",           "category": "compile" },
+    { "name": "dotnet-host-bin",                   "pkgbase": "dotnet-core-bin",                   "source": "aur",           "category": "repack",  "note": "split pkgbase" },
+    { "name": "dotnet-runtime-2.1",                "pkgbase": "dotnet-core-2.1",                   "source": "aur",           "category": "repack",  "note": "split pkgbase, shared with dotnet-sdk-2.1" },
+    { "name": "dotnet-sdk-2.1",                    "pkgbase": "dotnet-core-2.1",                   "source": "aur",           "category": "repack",  "note": "split pkgbase, shared with dotnet-runtime-2.1" },
+    { "name": "herdr",                             "pkgbase": "herdr",                             "source": "aur",           "category": "compile" },
+    { "name": "hypa-ttfx-bin",                     "pkgbase": "hypa-ttfx-bin",                     "source": "aur",           "category": "repack" },
+    { "name": "hyprland-preview-share-picker-git", "pkgbase": "hyprland-preview-share-picker-git", "source": "aur",           "category": "compile", "version_check": "none", "note": "VCS package: AUR pkgver is stale by construction and our build is ahead of it. Rebuild on a timer, never on a version diff." },
+    { "name": "localsend",                         "pkgbase": "localsend",                         "source": "aur",           "category": "compile" },
+    { "name": "mise-bin",                          "pkgbase": "mise-bin",                          "source": "aur",           "category": "repack" },
+    { "name": "obsidian-appimage",                 "pkgbase": "obsidian",                          "source": "aur",           "category": "compile", "note": "split pkgbase; package() runs the aarch64 AppImage via --appimage-extract, so it cannot be repacked on x86" },
+    { "name": "omacalc",                           "pkgbase": "omacalc",                           "source": "omarchy-pkgs",  "category": "compile" },
+    { "name": "omacut",                            "pkgbase": "omacut",                            "source": "omarchy-pkgs",  "category": "compile" },
+    { "name": "omarchy-emacs",                     "pkgbase": "omarchy-emacs",                     "source": "aur",           "category": "any",     "note": "AUR leads omarchy-pkgs here (1.10.1 vs 1.9.1) — do not switch the source" },
+    { "name": "omarchy-webapp-theme",              "pkgbase": "omarchy-webapp-theme",              "source": "aur",           "category": "any" },
+    { "name": "omawrite",                          "pkgbase": "omawrite",                          "source": "omarchy-pkgs",  "category": "compile" },
+    { "name": "openai-codex-desktop",              "pkgbase": "openai-codex-desktop",              "source": "omarchy-pkgs",  "category": "repack",  "note": "not in the AUR; repacks a vendor .deb with source_aarch64" },
+    { "name": "tensaku",                           "pkgbase": "tensaku",                           "source": "aur",           "category": "compile", "ignorearch": true, "note": "AUR declares arch=('x86_64') only" },
+    { "name": "ttf-ia-writer",                     "pkgbase": "ttf-ia-writer",                     "source": "aur",           "category": "any" },
+    { "name": "ttfx",                              "pkgbase": "ttfx",                              "source": "omarchy-pkgs",  "category": "compile" },
+    { "name": "tzupdate",                          "pkgbase": "tzupdate",                          "source": "aur",           "category": "compile", "ignorearch": true, "note": "AUR declares arch=('x86_64') only" },
+    { "name": "ufw-docker",                        "pkgbase": "ufw-docker",                        "source": "aur",           "category": "any" },
+    { "name": "xdg-terminal-exec",                 "pkgbase": "xdg-terminal-exec",                 "source": "aur",           "category": "any" },
+    { "name": "yaru-icon-theme",                   "pkgbase": "yaru",                              "source": "aur",           "category": "any",     "note": "split pkgbase building 9 subpackages; only yaru-icon-theme is published" }
+  ]
+}
