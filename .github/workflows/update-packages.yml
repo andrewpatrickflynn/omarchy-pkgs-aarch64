@@ -100,7 +100,7 @@ jobs:
             -e PKGBASE -e SOURCE -e CATEGORY -e PKGNAMES -e IGNOREARCH \
             -e OUTDIR=/w/staging \
             "$ARCH_IMAGE_ARM" bash -c \
-            'bash scripts/container-bootstrap.sh >/dev/null && bash scripts/build-package.sh'
+            'bash scripts/container-bootstrap.sh build >/dev/null && bash scripts/build-package.sh'
           sudo chown -R "$(id -u):$(id -g)" staging
           ls -la staging
 

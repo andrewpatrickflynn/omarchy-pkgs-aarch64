@@ -141,7 +141,16 @@ built=("$work/out"/*"$PKGEXT_WANTED")
 ((${#built[@]})) || die "$PKGBASE produced no $PKGEXT_WANTED artifact"
 log "Built ${#built[@]} artifact(s): $(printf '%s ' "${built[@]##*/}")"
 
-artifact_pkgname() { basename "$1" "$PKGEXT_WANTED" | rev | cut -d- -f4- | rev; }
+# Read the name from .PKGINFO rather than inferring it from the filename.
+# Authoritative for split pkgbases, where several artifacts share a prefix
+# (yaru builds 9 subpackages; dotnet-core-2.1 builds 2).
+artifact_pkgname() {
+  local name
+  name="$(bsdtar -xOqf "$1" .PKGINFO 2>/dev/null \
+    | awk -F' = ' '/^pkgname = /{print $2; exit}')"
+  [[ -n "$name" ]] || die "could not read pkgname from $1 (.PKGINFO missing?)"
+  printf '%s' "$name"
+}
 
 # Refuse to ship an x86 payload under an aarch64 filename. This is the check
 # that would catch a silently-ignored CARCH override.
