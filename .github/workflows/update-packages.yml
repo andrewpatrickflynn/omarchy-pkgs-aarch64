@@ -35,9 +35,13 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Arch Linux ARM, aarch64. Every build runs here so the target arch is real
-  # rather than forced via CARCH — see scripts/build-package.sh for why.
-  ARCH_IMAGE: menci/archlinuxarm:base-devel
+  # Builds run in an aarch64 container so the target arch is real rather than
+  # forced via CARCH — see scripts/build-package.sh for why.
+  ARCH_IMAGE_ARM: menci/archlinuxarm:base-devel
+  # Detection and publishing need vercmp, repo-add, jq and gh, none of which
+  # care about the target architecture. Running them natively on x86 avoids
+  # emulating a full `pacman -Syu`, which is minutes of qemu for no benefit.
+  ARCH_IMAGE_X86: archlinux:base-devel
 
 jobs:
   detect:
@@ -50,9 +54,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Register binfmt for aarch64
-        run: docker run --privileged --rm tonistiigi/binfmt:qemu-v8.1.5 --install arm64
-
       - name: Compare upstream against the published db
         id: detect
         env:
@@ -62,10 +63,10 @@ jobs:
           PACKAGES: ${{ inputs.packages }}
         run: |
           : > .gh_output
-          docker run --rm --platform linux/arm64 -v "$PWD:/w" -w /w \
+          docker run --rm -v "$PWD:/w" -w /w \
             -e GH_REPO -e GH_TOKEN -e CATEGORIES -e PACKAGES \
             -e GITHUB_OUTPUT=/w/.gh_output \
-            "$ARCH_IMAGE" bash -c \
+            "$ARCH_IMAGE_X86" bash -c \
             'bash scripts/container-bootstrap.sh >/dev/null && bash scripts/detect-updates.sh'
           cat .gh_output >> "$GITHUB_OUTPUT"
 
@@ -98,7 +99,7 @@ jobs:
           docker run --rm --platform linux/arm64 -v "$PWD:/w" -w /w \
             -e PKGBASE -e SOURCE -e CATEGORY -e PKGNAMES -e IGNOREARCH \
             -e OUTDIR=/w/staging \
-            "$ARCH_IMAGE" bash -c \
+            "$ARCH_IMAGE_ARM" bash -c \
             'bash scripts/container-bootstrap.sh >/dev/null && bash scripts/build-package.sh'
           sudo chown -R "$(id -u):$(id -g)" staging
           ls -la staging
@@ -118,9 +119,6 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
-      - name: Register binfmt for aarch64
-        run: docker run --privileged --rm tonistiigi/binfmt:qemu-v8.1.5 --install arm64
 
       - uses: actions/download-artifact@v4
         with:
@@ -148,10 +146,10 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
         run: |
           mkdir -p .newdb
-          docker run --rm --platform linux/arm64 -v "$PWD:/w" -w /w \
+          docker run --rm -v "$PWD:/w" -w /w \
             -e GH_REPO -e GH_TOKEN -e DRY_RUN \
             -e PKGDIR=/w/staging -e DB_OUT=/w/.newdb \
-            "$ARCH_IMAGE" bash -c \
+            "$ARCH_IMAGE_X86" bash -c \
             'bash scripts/container-bootstrap.sh >/dev/null && bash scripts/publish.sh'
           sudo chown -R "$(id -u):$(id -g)" .newdb
 
@@ -160,17 +158,17 @@ jobs:
         env:
           GH_REPO: ${{ github.repository }}
         run: |
-          docker run --rm --platform linux/arm64 -v "$PWD:/w" -w /w \
+          docker run --rm -v "$PWD:/w" -w /w \
             -e GH_REPO \
-            "$ARCH_IMAGE" bash -c \
+            "$ARCH_IMAGE_X86" bash -c \
             'bash scripts/container-bootstrap.sh >/dev/null && bash scripts/smoke-test.sh'
 
       - name: Sync the README version table
         if: steps.staged.outputs.count != '0' && !inputs.dry_run
         run: |
-          docker run --rm --platform linux/arm64 -v "$PWD:/w" -w /w \
+          docker run --rm -v "$PWD:/w" -w /w \
             -e DB=/w/.newdb/omarchy-aarch64.db.tar.zst \
-            "$ARCH_IMAGE" bash -c \
+            "$ARCH_IMAGE_X86" bash -c \
             'bash scripts/container-bootstrap.sh >/dev/null && bash scripts/update-readme.sh'
           sudo chown "$(id -u):$(id -g)" README.md
           if git diff --quiet -- README.md; then
