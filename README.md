@@ -96,11 +96,11 @@ which is what would make `pacman -Syu` offer you a downgrade.
 
 The packages differ only in where they can be built:
 
-| Group | Count | Built on |
-|-------|-------|----------|
-| `any` — `arch=('any')`, architecture-independent | 6 | free x86 runner, emulated aarch64 container |
-| `repack` — ships a vendor-prebuilt ARM binary | 7 | free x86 runner, emulated aarch64 container |
-| `compile` — built from source | 12 | still manual; needs a native ARM runner |
+| Group | Count | Automated |
+|-------|-------|-----------|
+| `any` — `arch=('any')`, architecture-independent | 6 | yes |
+| `repack` — ships a vendor-prebuilt ARM binary | 7 | yes |
+| `compile` — built from source | 12 | not yet; same path, just slower |
 
 [`packages.json`](packages.json) records which group each package belongs to and
 where its PKGBUILD comes from — the AUR for most, `omacom-io/omarchy-pkgs` for
@@ -108,11 +108,16 @@ the five that aren't in the AUR. The source is per-package on purpose: for
 `omarchy-emacs` the AUR leads Omarchy's own repo, so switching it would be a
 downgrade.
 
-Every build runs inside an aarch64 container, so the target architecture is real
-rather than assumed. Forcing `CARCH=aarch64` inside an x86 container looks like
-it ought to work for the repacks — they only unpack a binary someone else
-built — but several of those PKGBUILDs execute the ARM binary while packaging
-it. `mise-bin` generates its shell completions that way.
+Builds run on `ubuntu-24.04-arm`, which is free for public repos; detection and
+publishing run on x86, since neither `vercmp` nor `repo-add` cares about the
+target architecture.
+
+Every build needs a real aarch64 environment. Forcing `CARCH=aarch64` inside an
+x86 container looks like it ought to work for the repacks — they only unpack a
+binary someone else built — but several of those PKGBUILDs execute the ARM
+binary while packaging it. `mise-bin` runs `mise completion` three times to
+generate its shell completions. Emulating aarch64 on an x86 runner does work,
+but a free native ARM runner makes it pointless.
 
 Publishing is ordered so the repo is never internally inconsistent: package
 assets upload first, then the four db files with `.db` last, and only then are

@@ -1,9 +1,10 @@
 name: Update packages
 
-# Phase 1 + 2: arch=any packages and prebuilt-ARM repacks, both on the free
-# x86 runner via an emulated aarch64 container. Adding "compile" to the
-# categories input routes those jobs to ubuntu-24.04-arm instead — the build
-# path is identical, only the runner changes.
+# Phase 1 + 2: arch=any packages and prebuilt-ARM repacks. Builds run on
+# ubuntu-24.04-arm, which is free for public repos; detection and publishing
+# run on x86 because nothing about them is architecture-specific. Adding
+# "compile" to the categories input is all phase 3 needs — those packages take
+# the same path, they just take longer.
 
 on:
   schedule:
@@ -35,8 +36,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Builds run in an aarch64 container so the target arch is real rather than
-  # forced via CARCH — see scripts/build-package.sh for why.
+  # Arch Linux ARM, aarch64, running natively on the ARM runner. Builds need a
+  # real aarch64 environment — see scripts/build-package.sh for why forcing
+  # CARCH in an x86 container is not equivalent.
   ARCH_IMAGE_ARM: menci/archlinuxarm:base-devel
   # Detection and publishing need vercmp, repo-add, jq and gh, none of which
   # care about the target architecture. Running them natively on x86 avoids
@@ -75,6 +77,8 @@ jobs:
     needs: detect
     if: needs.detect.outputs.has_updates == 'true'
     runs-on: ${{ matrix.runs_on }}
+    # A build that wedges should fail fast, not sit in the queue for hours.
+    timeout-minutes: 90
     strategy:
       # One broken PKGBUILD must not stop the other packages from shipping.
       fail-fast: false
@@ -82,10 +86,6 @@ jobs:
       matrix: ${{ fromJSON(needs.detect.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Register binfmt for aarch64
-        if: matrix.emulate
-        run: docker run --privileged --rm tonistiigi/binfmt:qemu-v8.1.5 --install arm64
 
       - name: Build
         env:
@@ -96,7 +96,7 @@ jobs:
           IGNOREARCH: ${{ matrix.ignorearch }}
         run: |
           mkdir -p staging
-          docker run --rm --platform linux/arm64 -v "$PWD:/w" -w /w \
+          docker run --rm -v "$PWD:/w" -w /w \
             -e PKGBASE -e SOURCE -e CATEGORY -e PKGNAMES -e IGNOREARCH \
             -e OUTDIR=/w/staging \
             "$ARCH_IMAGE_ARM" bash -c \

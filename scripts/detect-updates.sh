@@ -121,13 +121,12 @@ matrix="$(jq -c --slurpfile scope <(cat "$work/scope.json") \
       pkgnames: (map(.name) | join(",")),
       ignorearch: (map(.ignorearch // false) | any)
     }
-    # Every build runs in an aarch64 container. "any" and "repack" are cheap
-    # enough to emulate on a free x86 runner; "compile" would be far too slow,
-    # so it goes to a native ARM runner. Adding "compile" to CATEGORIES is all
-    # phase 3 needs from this script.
-    + (if .[0].category == "compile"
-       then { runs_on: "ubuntu-24.04-arm", emulate: false }
-       else { runs_on: "ubuntu-24.04",     emulate: true  } end))
+    # Every build runs in an aarch64 container, so every build wants a native
+    # aarch64 runner. ubuntu-24.04-arm is free for public repos, which makes
+    # emulating aarch64 on an x86 runner strictly worse: same result, plus
+    # qemu. Category no longer affects the runner; phase 3 only has to add
+    # "compile" to CATEGORIES.
+    + { runs_on: "ubuntu-24.04-arm" })
   | {include: .}
 ' <<<'null')"
 
