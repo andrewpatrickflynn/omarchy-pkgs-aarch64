@@ -27,7 +27,7 @@ changes. Packages come from three places:
 | Package | Version | Provides |
 |---------|---------|----------|
 | `aether` | 4.29.4-1 | Wallpaper-driven desktop theming |
-| `brave-origin-bin` | 1:1.93.136-1 | Minimalist browser from the Brave team |
+| `brave-origin-bin` | 1:1.93.138-1 | Minimalist browser from the Brave team |
 | `cliamp` | 1.63.2-1 | Retro terminal music player |
 | `dotnet-host-bin` | 10.0.11.sdk400-1 | .NET CLI driver |
 | `dotnet-runtime-2.1` | 2.1.30.sdk818-1 | .NET Core 2.1 runtime |
@@ -36,14 +36,14 @@ changes. Packages come from three places:
 | `hypa-ttfx-bin` | 0.3.1-1 | Hypa terminal text effects |
 | `hyprland-preview-share-picker-git` | 0.2.1.r9.ge2f30ff-1 | Share picker with window/monitor previews |
 | `localsend` | 1.18.2-1 | Cross-platform AirDrop alternative |
-| `mise-bin` | 2026.8.11-1 | Dev tools, env vars, task runner |
+| `mise-bin` | 2026.8.14-4 | Dev tools, env vars, task runner |
 | `obsidian-appimage` | 1.12.7-1 | Markdown knowledge base (AppImage) |
 | `omacalc` | 0.2.2-1 | Calculator — bound to `SUPER + CTRL + Q` |
 | `omacut` | 0.4.0-1 | Video length trimmer |
 | `omarchy-emacs` | 1.10.1-1 | Emacs theme/font syncing for Omarchy |
-| `omarchy-webapp-theme` | 0.3.5-1 | Theme Slack, Discord, GitHub et al. to match Omarchy |
+| `omarchy-webapp-theme` | 0.3.6-1 | Theme Slack, Discord, GitHub et al. to match Omarchy |
 | `omawrite` | 0.5.0-1 | Markdown writing app — bound to `SUPER + SHIFT + W` |
-| `openai-codex-desktop` | 26.818.61809-1 | ChatGPT desktop app with Codex |
+| `openai-codex-desktop` | 26.820.60940-1 | ChatGPT desktop app with Codex |
 | `tensaku` | 0.26.7-1 | Screenshot annotation for Wayland |
 | `ttf-ia-writer` | 20181225-1 | iA Writer font subset |
 | `ttfx` | 0.3.2-1 | Terminal text effects, static binary |
