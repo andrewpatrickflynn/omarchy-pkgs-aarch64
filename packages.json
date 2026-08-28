@@ -11,18 +11,18 @@
     "compile": "Compiled from source, or extraction requires executing an aarch64 binary. Needs a native ARM runner."
   },
   "packages": [
-    { "name": "aether",                            "pkgbase": "aether",                            "source": "aur",           "category": "compile" },
+    { "name": "aether",                            "pkgbase": "aether",                            "source": "aur",           "category": "repack",  "note": "no build(); package() installs the prebuilt aether-linux-arm64 from source_aarch64" },
     { "name": "brave-origin-bin",                  "pkgbase": "brave-origin-bin",                  "source": "aur",           "category": "repack",  "note": "epoch 1: — filename is sanitized on upload" },
     { "name": "cliamp",                            "pkgbase": "cliamp",                            "source": "aur",           "category": "compile" },
     { "name": "dotnet-host-bin",                   "pkgbase": "dotnet-core-bin",                   "source": "aur",           "category": "repack",  "note": "split pkgbase" },
     { "name": "dotnet-runtime-2.1",                "pkgbase": "dotnet-core-2.1",                   "source": "aur",           "category": "repack",  "note": "split pkgbase, shared with dotnet-sdk-2.1" },
     { "name": "dotnet-sdk-2.1",                    "pkgbase": "dotnet-core-2.1",                   "source": "aur",           "category": "repack",  "note": "split pkgbase, shared with dotnet-runtime-2.1" },
-    { "name": "herdr",                             "pkgbase": "herdr",                             "source": "aur",           "category": "compile" },
+    { "name": "herdr",                             "pkgbase": "herdr",                             "source": "aur",           "category": "compile", "note": "Currently unbuildable anywhere: its PKGBUILD pins makedepends zig0.15, which Arch dropped from [extra] when it moved to zig 0.16. Only the AUR has it, as a full LLVM Zig build declaring arch=(x86_64). Left to fail visibly when it next bumps rather than carrying a zig toolchain build; fail-fast:false keeps it from blocking anything else." },
     { "name": "hypa-ttfx-bin",                     "pkgbase": "hypa-ttfx-bin",                     "source": "aur",           "category": "repack" },
-    { "name": "hyprland-preview-share-picker-git", "pkgbase": "hyprland-preview-share-picker-git", "source": "aur",           "category": "compile", "version_check": "none", "note": "VCS package: AUR pkgver is stale by construction and our build is ahead of it. Rebuild on a timer, never on a version diff." },
+    { "name": "hyprland-preview-share-picker-git", "pkgbase": "hyprland-preview-share-picker-git", "source": "aur",           "category": "compile", "version_check": "none", "rebuild_after_days": 7, "note": "VCS package: AUR pkgver is stale by construction and our build is ahead of it, so a version diff can never trigger it. Rebuilt on a timer instead, measured from %BUILDDATE% in the published db." },
     { "name": "localsend",                         "pkgbase": "localsend",                         "source": "aur",           "category": "compile" },
     { "name": "mise-bin",                          "pkgbase": "mise-bin",                          "source": "aur",           "category": "repack" },
-    { "name": "obsidian-appimage",                 "pkgbase": "obsidian",                          "source": "aur",           "category": "compile", "note": "split pkgbase; package() runs the aarch64 AppImage via --appimage-extract, so it cannot be repacked on x86" },
+    { "name": "obsidian-appimage",                 "pkgbase": "obsidian",                          "source": "aur",           "category": "repack",  "note": "split pkgbase; no build(), package() extracts the prebuilt AppImage from source_aarch64. It does so by executing that AppImage, which is fine on a native ARM runner and was the only reason this could not be built on x86." },
     { "name": "omacalc",                           "pkgbase": "omacalc",                           "source": "omarchy-pkgs",  "category": "compile" },
     { "name": "omacut",                            "pkgbase": "omacut",                            "source": "omarchy-pkgs",  "category": "compile" },
     { "name": "omarchy-emacs",                     "pkgbase": "omarchy-emacs",                     "source": "aur",           "category": "any",     "note": "AUR leads omarchy-pkgs here (1.10.1 vs 1.9.1) — do not switch the source" },
@@ -35,6 +35,8 @@
     { "name": "tzupdate",                          "pkgbase": "tzupdate",                          "source": "aur",           "category": "compile", "ignorearch": true, "note": "AUR declares arch=('x86_64') only" },
     { "name": "ufw-docker",                        "pkgbase": "ufw-docker",                        "source": "aur",           "category": "any" },
     { "name": "xdg-terminal-exec",                 "pkgbase": "xdg-terminal-exec",                 "source": "aur",           "category": "any" },
+    { "name": "omarchy",                           "pkgbase": "omarchy",                           "source": "omarchy-pkgs",  "category": "any",     "skip": true, "note": "In the repo but deliberately NOT CI-managed. The published 4.0.1-2 is a patched Mac-fork build: it drops the limine, limine-mkinitcpio-hook and limine-snapper-sync dependencies, which are meaningless on Apple Silicon. Rebuilding from the upstream PKGBUILD would silently reintroduce them. Rebuild by hand, keeping the patch." },
+    { "name": "omarchy-settings",                  "pkgbase": "omarchy-settings",                  "source": "omarchy-pkgs",  "category": "any",     "skip": true, "note": "In the repo but added outside CI. Unlike omarchy, the published 4.0.1-2 is byte-identical to upstream 4.0.1-1 apart from pkgrel, so this one could safely be CI-managed by removing skip. Left skipped pending a decision, so it is recorded rather than silently untracked." },
     { "name": "yaru-icon-theme",                   "pkgbase": "yaru",                              "source": "aur",           "category": "any",     "extra_makedepends": ["devtools"], "note": "split pkgbase building 9 subpackages; only yaru-icon-theme is published. Its build() calls arch-meson, which ships in devtools and is not in its declared makedepends." }
   ]
 }

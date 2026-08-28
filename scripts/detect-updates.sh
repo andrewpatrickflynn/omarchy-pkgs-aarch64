@@ -16,14 +16,15 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/common.sh
 
 : "${GH_REPO:?GH_REPO must be set (owner/name)}"
-CATEGORIES="${CATEGORIES:-any,repack}"
+CATEGORIES="${CATEGORIES:-any,repack,compile}"
 PACKAGES="${PACKAGES:-}"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
 fetch_current_dbs "$work"
-db_versions "$work/$DB_NAME.db.tar.zst" > "$work/published.tsv"
+db_versions   "$work/$DB_NAME.db.tar.zst" > "$work/published.tsv"
+db_builddates "$work/$DB_NAME.db.tar.zst" > "$work/builddates.tsv"
 
 # --- select the packages in scope -------------------------------------------
 jq --arg cats "$CATEGORIES" --arg pkgs "$PACKAGES" '
@@ -32,7 +33,10 @@ jq --arg cats "$CATEGORIES" --arg pkgs "$PACKAGES" '
   | .packages
   | map(select(.category as $x | $c | index($x)))
   | map(select(($p | length) == 0 or (.name as $n | $p | index($n))))
-  | map(select((.version_check // "") != "none"))
+  | map(select((.skip // false) | not))
+  # version_check "none" packages stay in scope: they cannot be version-diffed,
+  # but they can still be due for a timed rebuild.
+  | map(select((.version_check // "") != "none" or (.rebuild_after_days // 0) > 0))
 ' "$MANIFEST" > "$work/scope.json"
 
 count="$(jq 'length' "$work/scope.json")"
@@ -79,9 +83,30 @@ done
 printf '%-38s %-24s %-24s %s\n' PACKAGE PUBLISHED UPSTREAM STATUS
 printf '%.0s-' {1..100}; echo
 status=0
+now="$(date +%s)"
 while read -r name; do
   published="$(awk -F'\t' -v n="$name" '$1 == n {print $2}' "$work/published.tsv")"
   upstream="$(awk -F'\t' -v n="$name" '$1 == n {print $2}' "$work/upstream.tsv")"
+
+  # Timer-driven packages (VCS): age the published build rather than compare
+  # versions, since upstream's declared pkgver is stale by construction.
+  days="$(jq -r --arg n "$name" '.[] | select(.name == $n) | .rebuild_after_days // 0' "$work/scope.json")"
+  if [[ "${days:-0}" -gt 0 ]]; then
+    built="$(awk -F'\t' -v n="$name" '$1 == n {print $2}' "$work/builddates.tsv")"
+    if [[ -z "$built" ]]; then
+      age_days=99999
+    else
+      age_days=$(( (now - built) / 86400 ))
+    fi
+    if (( age_days >= days )); then
+      printf '%-38s %-24s %-24s %s\n' "$name" "${published:-—}" "(timer)" "REBUILD (${age_days}d old, every ${days}d)"
+      echo "$name" >> "$work/needs-update.txt"
+    else
+      printf '%-38s %-24s %-24s %s\n' "$name" "${published:-—}" "(timer)" "current (${age_days}d old, every ${days}d)"
+    fi
+    continue
+  fi
+
   if [[ -z "$upstream" ]]; then
     printf '%-38s %-24s %-24s %s\n' "$name" "${published:-—}" "—" "NO UPSTREAM VERSION"
     warn "$name: no upstream version found; skipping"

@@ -1,10 +1,9 @@
 name: Update packages
 
-# Phase 1 + 2: arch=any packages and prebuilt-ARM repacks. Builds run on
-# ubuntu-24.04-arm, which is free for public repos; detection and publishing
-# run on x86 because nothing about them is architecture-specific. Adding
-# "compile" to the categories input is all phase 3 needs — those packages take
-# the same path, they just take longer.
+# Builds run on ubuntu-24.04-arm, which is free for public repos; detection and
+# publishing run on x86 because nothing about them is architecture-specific.
+# All three categories are automated. Packages marked skip in packages.json are
+# never touched, and VCS packages rebuild on a timer rather than a version diff.
 
 on:
   schedule:
@@ -19,7 +18,7 @@ on:
       categories:
         description: 'Categories to consider: any, repack, compile'
         required: false
-        default: 'any,repack'
+        default: 'any,repack,compile'
       dry_run:
         description: 'Build and verify, but do not touch the release'
         type: boolean
@@ -61,7 +60,7 @@ jobs:
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CATEGORIES: ${{ inputs.categories || 'any,repack' }}
+          CATEGORIES: ${{ inputs.categories || 'any,repack,compile' }}
           PACKAGES: ${{ inputs.packages }}
         run: |
           : > .gh_output

@@ -35,6 +35,22 @@ db_versions() {
   rm -rf "$tmp"
 }
 
+# Read every %NAME% -> %BUILDDATE% pair out of a repo db tarball. Used to age
+# VCS packages, whose version can never signal that a rebuild is due.
+db_builddates() {
+  local db="$1" tmp
+  tmp="$(mktemp -d)"
+  tar -xf "$db" -C "$tmp"
+  local d
+  for d in "$tmp"/*/; do
+    [[ -f "$d/desc" ]] || continue
+    printf '%s\t%s\n' \
+      "$(sed -n '/^%NAME%$/{n;p;}' "$d/desc")" \
+      "$(sed -n '/^%BUILDDATE%$/{n;p;}' "$d/desc")"
+  done
+  rm -rf "$tmp"
+}
+
 # Read every %FILENAME% out of a repo db tarball.
 db_filenames() {
   local db="$1" tmp

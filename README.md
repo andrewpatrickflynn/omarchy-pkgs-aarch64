@@ -99,8 +99,24 @@ The packages differ only in where they can be built:
 | Group | Count | Automated |
 |-------|-------|-----------|
 | `any` — `arch=('any')`, architecture-independent | 6 | yes |
-| `repack` — ships a vendor-prebuilt ARM binary | 7 | yes |
-| `compile` — built from source | 12 | not yet; same path, just slower |
+| `repack` — ships a vendor-prebuilt ARM binary | 9 | yes |
+| `compile` — built from source | 10 | yes |
+
+Two packages in the repo are deliberately **not** automated, and say so in
+`packages.json` rather than being silently absent. `omarchy` is a patched
+Mac-fork build that drops the `limine` bootloader dependencies, which mean
+nothing on Apple Silicon; rebuilding it from the upstream PKGBUILD would put
+them back. `omarchy-settings` is identical to upstream apart from `pkgrel` and
+could be automated by dropping its `skip`.
+
+`herdr` currently fails to build anywhere: its PKGBUILD pins `zig0.15`, which
+Arch dropped from `[extra]` on the move to `zig 0.16`. It is left to fail
+visibly rather than carrying a from-source Zig toolchain build, and
+`fail-fast: false` stops it blocking anything else.
+
+`hyprland-preview-share-picker-git` is a VCS package whose AUR `pkgver` is
+stale by construction, so a version diff can never trigger it. It rebuilds on a
+7-day timer measured from `%BUILDDATE%` in the published db.
 
 [`packages.json`](packages.json) records which group each package belongs to and
 where its PKGBUILD comes from — the AUR for most, `omacom-io/omarchy-pkgs` for

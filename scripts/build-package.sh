@@ -32,9 +32,9 @@ EXTRA_MAKEDEPENDS="${EXTRA_MAKEDEPENDS:-}"
 ALLOW_FOREIGN_ELF="${ALLOW_FOREIGN_ELF:-}"
 
 case "$CATEGORY" in
-  any)    want_arch=any ;;
-  repack) want_arch=aarch64 ;;
-  *) die "category '$CATEGORY' is not buildable on x86; it needs a native ARM runner" ;;
+  any)             want_arch=any ;;
+  repack|compile)  want_arch=aarch64 ;;
+  *) die "unknown category '$CATEGORY' (want any, repack or compile)" ;;
 esac
 
 OUTDIR="$(mkdir -p "$OUTDIR" && cd "$OUTDIR" && pwd)"
@@ -113,9 +113,18 @@ srcinfo="$work/.SRCINFO"
 ( cd "$src" && as_builder makepkg --config "$conf" --printsrcinfo ) > "$srcinfo" \
   || die "could not parse PKGBUILD for $PKGBASE"
 
+# "compile" additionally needs runtime depends present at build time: linking
+# tensaku wants gtk4 and libadwaita headers, not just rustc. "any" and "repack"
+# never compile against anything, so installing their depends would be waste.
+if [[ "$CATEGORY" == "compile" ]]; then
+  dep_re='^[[:space:]]*(make|check)?depends(_[[:alnum:]_]+)?[[:space:]]*=[[:space:]]*(.+)'
+else
+  dep_re='^[[:space:]]*(make|check)depends(_[[:alnum:]_]+)?[[:space:]]*=[[:space:]]*(.+)'
+fi
+
 mapfile -t deps < <(
   {
-    sed -nE 's/^[[:space:]]*(make|check)depends(_[[:alnum:]_]+)?[[:space:]]*=[[:space:]]*(.+)/\3/p' "$srcinfo" \
+    sed -nE "s/$dep_re/\3/p" "$srcinfo" \
       | sed -E 's/[<>=].*$//' | tr -d ' '
     # Some PKGBUILDs call tooling they never declare — yaru's build() uses
     # arch-meson, which ships in devtools. packages.json records those.
