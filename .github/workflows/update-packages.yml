@@ -196,3 +196,38 @@ jobs:
             echo "Artifacts staged: ${{ steps.staged.outputs.count }}"
             echo "Dry run: ${{ inputs.dry_run || false }}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  notify:
+    name: Report failure
+    needs: [detect, build, publish]
+    # A red run nobody looks at is the same as no CI. This turns a failed
+    # scheduled run into something that shows up in the repo's issues.
+    if: failure()
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or update the failure issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PACKAGES: ${{ needs.detect.outputs.packages }}
+        run: |
+          title="CI: package update run failed"
+          body="$(printf '%s\n\n%s\n\n%s\n' \
+            "A \`${{ github.workflow }}\` run (\`${{ github.event_name }}\`) failed." \
+            "Packages in scope: \`${PACKAGES:-none}\`" \
+            "Run: $RUN_URL")"
+
+          # Match on title so repeated failures append rather than pile up.
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "in:title $title" --json number,title \
+            --jq "[.[] | select(.title == \"$title\")] | .[0].number // empty")"
+
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+            echo "Commented on existing issue #$existing"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

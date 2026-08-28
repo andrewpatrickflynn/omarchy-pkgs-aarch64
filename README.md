@@ -150,6 +150,12 @@ gh workflow run update-packages.yml -f packages=mise-bin   # one package
 gh workflow run update-packages.yml -f dry_run=true        # build, verify, publish nothing
 ```
 
+[`scripts/self-test.sh`](scripts/self-test.sh) covers the parts that would fail
+quietly rather than loudly — epoch filename handling, reading a package's name
+from its `.PKGINFO`, the ELF audit and its allowances, and repo db parsing. It
+is offline, takes a couple of seconds, and runs on every push and pull request.
+A failed scheduled run opens an issue rather than only turning a run red.
+
 The scripts under [`scripts/`](scripts) are plain bash and run outside CI too.
 `scripts/smoke-test.sh` is the useful one on its own: it syncs the published repo
 the way pacman does and checks that every package the db advertises is actually

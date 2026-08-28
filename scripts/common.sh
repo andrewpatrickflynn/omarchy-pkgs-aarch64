@@ -77,3 +77,73 @@ fetch_current_dbs() {
     || die "could not download the current db from release '$REPO_TAG'"
   [[ -f "$dest/$DB_NAME.db.tar.zst" ]] || die "release '$REPO_TAG' has no $DB_NAME.db.tar.zst"
 }
+
+# --- package inspection ------------------------------------------------------
+# These live here rather than in build-package.sh so scripts/self-test.sh can
+# exercise them directly. They are the fiddliest logic in the repo.
+ALLOW_FOREIGN_ELF="${ALLOW_FOREIGN_ELF:-}"
+
+# Read the name from .PKGINFO rather than inferring it from the filename.
+# Authoritative for split pkgbases, where several artifacts share a prefix
+# (yaru builds 9 subpackages; dotnet-core-2.1 builds 2).
+artifact_pkgname() {
+  local name
+  name="$(bsdtar -xOqf "$1" .PKGINFO 2>/dev/null \
+    | awk -F' = ' '/^pkgname = /{print $2; exit}')"
+  [[ -n "$name" ]] || die "could not read pkgname from $1 (.PKGINFO missing?)"
+  printf '%s' "$name"
+}
+# e_machine is read straight out of the ELF header rather than matched against
+# file(1)'s prose, which spells the same architecture several ways ("x86-64",
+# "Intel 80386", "Intel i386").
+elf_machine() {
+  local bytes lo hi
+  bytes="$(od -An -tu1 -j18 -N2 -- "$1" 2>/dev/null)" || return 1
+  read -r lo hi <<< "$bytes"
+  [[ -n "$lo" && -n "$hi" ]] || return 1
+  printf '%s' "$(( lo + hi * 256 ))"
+}
+# Vendors bundle native modules for every platform they support. Those are
+# expected and unused here, but the allowance is a path glob rather than a
+# blanket exemption, so an x86 binary somewhere that matters still fails.
+elf_allowed() {
+  local rel="$1" pat pats
+  [[ -n "$ALLOW_FOREIGN_ELF" ]] || return 1
+  IFS=',' read -r -a pats <<< "$ALLOW_FOREIGN_ELF"
+  for pat in "${pats[@]}"; do
+    [[ -n "$pat" ]] || continue
+    # shellcheck disable=SC2053  # glob match is the point
+    [[ "$rel" == $pat ]] && return 0
+  done
+  return 1
+}
+audit_elf() {
+  local pkg="$1" tmp list arm=0 x86=0 other=0 allowed=0 m rel
+  tmp="$(mktemp -d)"; list="$tmp.list"
+  bsdtar -xf "$pkg" -C "$tmp" 2>/dev/null || die "could not extract $pkg"
+
+  # One batched file(1) call to find the ELF objects, then read each header.
+  command find "$tmp" -type f -print0 | xargs -0 -r file -N -- 2>/dev/null \
+    | sed -n 's/^\(.*\): ELF .*/\1/p' > "$list" || true
+
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    m="$(elf_machine "$f")" || continue
+    case "$m" in
+      183) arm=$((arm + 1)) ;;        # EM_AARCH64
+      62|3)                             # EM_X86_64, EM_386
+            rel="${f#"$tmp"}"
+            if elf_allowed "$rel"; then
+              allowed=$((allowed + 1))
+            else
+              x86=$((x86 + 1)); warn "  x86 object: $rel"
+            fi ;;
+      *) other=$((other + 1)) ;;      # EM_ARM (40) and friends: not our problem
+    esac
+  done < "$list"
+  rm -rf "$tmp" "$list"
+
+  log "  ELF audit: $arm aarch64, $x86 x86, $other other-arch, $allowed allowed-foreign"
+  (( x86 == 0 )) || die "$pkg carries $x86 x86 ELF object(s) — this is not an aarch64 build"
+  (( arm > 0 ))  || die "$pkg contains no aarch64 ELF objects — expected a prebuilt ARM payload"
+}

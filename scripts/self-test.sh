@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# Self-tests for the logic that would fail silently rather than loudly:
+# epoch filename handling, package identification, the ELF audit, and db
+# parsing. Everything here is offline and takes a couple of seconds.
+#
+#   bash scripts/self-test.sh
+set -uo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+source scripts/common.sh
+
+pass=0; fail=0
+ok()   { pass=$((pass+1)); printf '  \033[1;32mok\033[0m   %s\n' "$1"; }
+no()   { fail=$((fail+1)); printf '  \033[1;31mFAIL\033[0m %s\n     %s\n' "$1" "${2:-}"; }
+is()   { [[ "$2" == "$3" ]] && ok "$1" || no "$1" "expected '$3', got '$2'"; }
+
+work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
+
+# --- crafted ELF objects: e_machine at offset 18 ----------------------------
+mkelf() { # machine path [class]
+  python3 - "$1" "$2" "${3:-2}" <<'PY'
+import struct, sys, os
+machine, path, cls = int(sys.argv[1]), sys.argv[2], int(sys.argv[3])
+os.makedirs(os.path.dirname(path), exist_ok=True)
+h = bytearray(64)
+h[0:4] = b'\x7fELF'; h[4] = cls; h[5] = 1; h[6] = 1
+h[16:18] = struct.pack('<H', 3)
+h[18:20] = struct.pack('<H', machine)
+h[20:24] = struct.pack('<I', 1)
+open(path, 'wb').write(bytes(h) + b'\0' * 128)
+PY
+}
+mkpkg() { # dir out-name  -> a .pkg.tar.xz with a .PKGINFO
+  local dir="$1" out="$2" name="$3"
+  printf 'pkgname = %s\npkgver = 1.0-1\narch = aarch64\n' "$name" > "$dir/.PKGINFO"
+  ( cd "$dir" && tar -cf - .PKGINFO ./* 2>/dev/null | xz > "$out" )
+}
+
+echo "== epoch / asset names"
+is "colon becomes dot"        "$(sanitize_asset_name 'brave-1:1.93-1-aarch64.pkg.tar.xz')" 'brave-1.1.93-1-aarch64.pkg.tar.xz'
+is "no colon is untouched"    "$(sanitize_asset_name 'mise-2026.8-1-aarch64.pkg.tar.xz')"  'mise-2026.8-1-aarch64.pkg.tar.xz'
+is "sanitising is idempotent" "$(sanitize_asset_name "$(sanitize_asset_name 'a-1:2-1.pkg.tar.xz')")" 'a-1.2-1.pkg.tar.xz'
+
+echo "== vercmp assumptions the detect logic relies on"
+is "epoch beats a bigger plain version" "$(vercmp '1:1.0-1' '9.9-1')"          1
+is "pkgrel breaks a version tie"        "$(vercmp '2026.8.14-4' '2026.8.14-1')" 1
+is "equal versions compare equal"       "$(vercmp '1.2.3-1' '1.2.3-1')"         0
+is "VCS r16 sorts above r9"             "$(vercmp '0.2.1.r16.g0ef9b30-1' '0.2.1.r9.ge2f30ff-1')" 1
+
+echo "== package identification (.PKGINFO, not the filename)"
+mkdir -p "$work/p1/usr/bin"; mkelf 183 "$work/p1/usr/bin/tool"
+mkpkg "$work/p1" "$work/yaru-icon-theme-26.04-1-any.pkg.tar.xz" "yaru-icon-theme"
+is "reads pkgname from .PKGINFO" "$(artifact_pkgname "$work/yaru-icon-theme-26.04-1-any.pkg.tar.xz")" 'yaru-icon-theme'
+mkdir -p "$work/p2/usr/bin"; mkelf 183 "$work/p2/usr/bin/tool"
+mkpkg "$work/p2" "$work/weird-name-1:2.3-4-aarch64.pkg.tar.xz" "brave-origin-bin"
+is "unaffected by an epoch in the filename" "$(artifact_pkgname "$work/weird-name-1:2.3-4-aarch64.pkg.tar.xz")" 'brave-origin-bin'
+
+echo "== ELF audit"
+mkdir -p "$work/arm/usr/bin"; mkelf 183 "$work/arm/usr/bin/app"
+mkpkg "$work/arm" "$work/clean.pkg.tar.xz" clean
+( ALLOW_FOREIGN_ELF="" audit_elf "$work/clean.pkg.tar.xz" ) >/dev/null 2>&1 \
+  && ok "aarch64-only package passes" || no "aarch64-only package passes" "audit rejected a clean package"
+
+mkdir -p "$work/x86/usr/bin"; mkelf 183 "$work/x86/usr/bin/app"; mkelf 62 "$work/x86/usr/bin/rogue"
+mkpkg "$work/x86" "$work/x86.pkg.tar.xz" x86pkg
+( ALLOW_FOREIGN_ELF="" audit_elf "$work/x86.pkg.tar.xz" ) >/dev/null 2>&1 \
+  && no "x86-64 object is rejected" "audit accepted an x86-64 payload" || ok "x86-64 object is rejected"
+
+mkdir -p "$work/i386/usr/bin"; mkelf 183 "$work/i386/usr/bin/app"; mkelf 3 "$work/i386/usr/bin/rogue" 1
+mkpkg "$work/i386" "$work/i386.pkg.tar.xz" i386pkg
+( ALLOW_FOREIGN_ELF="" audit_elf "$work/i386.pkg.tar.xz" ) >/dev/null 2>&1 \
+  && no "i386 object is rejected" "audit accepted an i386 payload" || ok "i386 object is rejected"
+
+# 32-bit ARM is bundled by Electron apps and must not trip the audit
+mkdir -p "$work/arm32/usr/lib"; mkelf 183 "$work/arm32/usr/lib/app"; mkelf 40 "$work/arm32/usr/lib/legacy.so" 1
+mkpkg "$work/arm32" "$work/arm32.pkg.tar.xz" arm32pkg
+( ALLOW_FOREIGN_ELF="" audit_elf "$work/arm32.pkg.tar.xz" ) >/dev/null 2>&1 \
+  && ok "bundled 32-bit ARM does not trip the audit" || no "bundled 32-bit ARM does not trip the audit" "ARM32 treated as foreign"
+
+mkdir -p "$work/pb/usr/lib/node/prebuilds/linux-x64"
+mkelf 183 "$work/pb/usr/lib/node/app"; mkelf 62 "$work/pb/usr/lib/node/prebuilds/linux-x64/n.node"
+mkpkg "$work/pb" "$work/pb.pkg.tar.xz" pbpkg
+( ALLOW_FOREIGN_ELF='*/prebuilds/*' audit_elf "$work/pb.pkg.tar.xz" ) >/dev/null 2>&1 \
+  && ok "allowance permits x86 under the named glob" || no "allowance permits x86 under the named glob" "glob did not match"
+( ALLOW_FOREIGN_ELF="" audit_elf "$work/pb.pkg.tar.xz" ) >/dev/null 2>&1 \
+  && no "allowance is required, not implied" "passed without an allowance" || ok "allowance is required, not implied"
+# the allowance must not become a blanket exemption
+mkdir -p "$work/sneak/usr/bin" "$work/sneak/usr/lib/prebuilds"
+mkelf 183 "$work/sneak/usr/lib/prebuilds/ok"; mkelf 62 "$work/sneak/usr/bin/main"
+mkpkg "$work/sneak" "$work/sneak.pkg.tar.xz" sneakpkg
+( ALLOW_FOREIGN_ELF='*/prebuilds/*' audit_elf "$work/sneak.pkg.tar.xz" ) >/dev/null 2>&1 \
+  && no "x86 outside the glob still fails" "allowance leaked to /usr/bin" || ok "x86 outside the glob still fails"
+
+echo "== repo db parsing"
+mkdir -p "$work/db/foo-1:2.3-4"
+{ echo '%NAME%'; echo 'foo'; echo; echo '%VERSION%'; echo '1:2.3-4'; echo;
+  echo '%FILENAME%'; echo 'foo-1.2.3-4-aarch64.pkg.tar.xz'; echo;
+  echo '%BUILDDATE%'; echo '1787109270'; } > "$work/db/foo-1:2.3-4/desc"
+( cd "$work/db" && tar -cf - . | zstd -q -o "$work/test.db.tar.zst" )
+is "db_versions reads the epoch version"  "$(db_versions   "$work/test.db.tar.zst")" "$(printf 'foo\t1:2.3-4')"
+is "db_filenames reads the sanitised name" "$(db_filenames "$work/test.db.tar.zst")" 'foo-1.2.3-4-aarch64.pkg.tar.xz'
+is "db_builddates reads BUILDDATE"        "$(db_builddates "$work/test.db.tar.zst")" "$(printf 'foo\t1787109270')"
+
+echo "== manifest is coherent"
+is "manifest parses"           "$(jq -e 'type' packages.json 2>/dev/null)" '"object"'
+dupes="$(jq -r '.packages | group_by(.name) | map(select(length > 1)) | length' packages.json)"
+is "no duplicate package names" "$dupes" '0'
+bad="$(jq -r '.packages | map(select(.category as $c | ["any","repack","compile"] | index($c) | not)) | length' packages.json)"
+is "every category is known"    "$bad" '0'
+badsrc="$(jq -r '.packages | map(select(.source as $s | ["aur","omarchy-pkgs"] | index($s) | not)) | length' packages.json)"
+is "every source is known"      "$badsrc" '0'
+
+echo
+if (( fail )); then
+  printf '\033[1;31m%d passed, %d FAILED\033[0m\n' "$pass" "$fail"; exit 1
+fi
+printf '\033[1;32mall %d self-tests passed\033[0m\n' "$pass"

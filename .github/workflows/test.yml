@@ -1,0 +1,26 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  self-tests:
+    name: Self-tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # An Arch container for vercmp: whether one version supersedes another has
+      # to be decided by the same comparator pacman will use on users' machines.
+      # Everything else here is offline, so x86 is fine — the ELF fixtures are
+      # synthesised headers rather than real binaries.
+      - name: Run self-tests
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w archlinux:base-devel bash -c '
+            set -euo pipefail
+            pacman -Syu --noconfirm --needed jq zstd python >/dev/null
+            bash scripts/self-test.sh
+          '
