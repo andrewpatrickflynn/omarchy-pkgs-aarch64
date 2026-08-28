@@ -43,7 +43,7 @@ changes. Packages come from three places:
 | `omarchy-emacs` | 1.10.1-1 | Emacs theme/font syncing for Omarchy |
 | `omarchy-webapp-theme` | 0.3.6-1 | Theme Slack, Discord, GitHub et al. to match Omarchy |
 | `omawrite` | 0.5.0-1 | Markdown writing app — bound to `SUPER + SHIFT + W` |
-| `openai-codex-desktop` | 26.820.71523-1 | ChatGPT desktop app with Codex |
+| `openai-codex-desktop` | 26.820.80927-1 | ChatGPT desktop app with Codex |
 | `tensaku` | 0.26.7-1 | Screenshot annotation for Wayland |
 | `ttf-ia-writer` | 20181225-1 | iA Writer font subset |
 | `ttfx` | 0.3.2-1 | Terminal text effects, static binary |
