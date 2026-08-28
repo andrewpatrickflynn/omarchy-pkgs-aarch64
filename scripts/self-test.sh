@@ -107,7 +107,7 @@ dupes="$(jq -r '.packages | group_by(.name) | map(select(length > 1)) | length' 
 is "no duplicate package names" "$dupes" '0'
 bad="$(jq -r '.packages | map(select(.category as $c | ["any","repack","compile"] | index($c) | not)) | length' packages.json)"
 is "every category is known"    "$bad" '0'
-badsrc="$(jq -r '.packages | map(select(.source as $s | ["aur","omarchy-pkgs"] | index($s) | not)) | length' packages.json)"
+badsrc="$(jq -r '.packages | map(select(.source as $s | ["aur","omarchy-pkgs","omarchy-mac"] | index($s) | not)) | length' packages.json)"
 is "every source is known"      "$badsrc" '0'
 
 echo

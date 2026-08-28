@@ -2,7 +2,7 @@
 
 Unofficial **aarch64** builds of Omarchy's own packages, for Apple Silicon Macs
 running [Asahi Linux](https://asahilinux.org/) and the
-[omarchy-mac](https://codeberg.org/malik-na/omarchy-mac) fork.
+[omarchy-mac](https://github.com/omarchy-mac/omarchy-mac) fork.
 
 ## Why this exists
 
@@ -103,11 +103,18 @@ The packages differ only in where they can be built:
 | `compile` — built from source | 10 | yes |
 
 Two packages in the repo are deliberately **not** automated, and say so in
-`packages.json` rather than being silently absent. `omarchy` is a patched
-Mac-fork build that drops the `limine` bootloader dependencies, which mean
-nothing on Apple Silicon; rebuilding it from the upstream PKGBUILD would put
-them back. `omarchy-settings` is identical to upstream apart from `pkgrel` and
-could be automated by dropping its `skip`.
+`packages.json` rather than being silently absent. Both are built from
+[omarchy-mac](https://github.com/omarchy-mac/omarchy-mac) and carry Apple
+Silicon patches that rebuilding from upstream's PKGBUILD would discard.
+
+`omarchy` drops the `limine` bootloader dependencies, which mean nothing on a
+Mac. `omarchy-settings` goes further: it re-inserts the `asahi` mkinitcpio hook
+that stages Apple Silicon firmware, without which the next `mkinitcpio` run
+produces an initramfs that cannot drive the display or Wi-Fi and the boot wedges
+— it also drops the `btrfs-overlayfs` hook that needs `limine-snapper-sync`,
+sets trackpad defaults, and adds around 19 files including an `asahi-alarm`
+pacman mirrorlist. Rebuild both by hand from the fork; do not remove their
+`skip`.
 
 `herdr` currently fails to build anywhere: its PKGBUILD pins `zig0.15`, which
 Arch dropped from `[extra]` on the move to `zig 0.16`. It is left to fail
