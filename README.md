@@ -26,7 +26,7 @@ changes. Packages come from three places:
 
 | Package | Version | Provides |
 |---------|---------|----------|
-| `aether` | 4.29.4-1 | Wallpaper-driven desktop theming |
+| `aether` | 4.29.7-1 | Wallpaper-driven desktop theming |
 | `brave-origin-bin` | 1:1.94.117-1 | Minimalist browser from the Brave team |
 | `cliamp` | 1.63.2-1 | Retro terminal music player |
 | `dotnet-host-bin` | 10.0.11.sdk400-1 | .NET CLI driver |
@@ -34,7 +34,7 @@ changes. Packages come from three places:
 | `dotnet-sdk-2.1` | 2.1.30.sdk818-1 | .NET Core 2.1 SDK |
 | `herdr` | 0.8.2-1 | Terminal workspace manager for AI coding agents |
 | `hypa-ttfx-bin` | 0.3.1-1 | Hypa terminal text effects |
-| `hyprland-preview-share-picker-git` | 0.2.1.r9.ge2f30ff-1 | Share picker with window/monitor previews |
+| `hyprland-preview-share-picker-git` | 0.2.1.r16.g0ef9b30-1 | Share picker with window/monitor previews |
 | `localsend` | 1.18.2-1 | Cross-platform AirDrop alternative |
 | `mise-bin` | 2026.8.14-4 | Dev tools, env vars, task runner |
 | `obsidian-appimage` | 1.12.7-1 | Markdown knowledge base (AppImage) |
@@ -44,7 +44,7 @@ changes. Packages come from three places:
 | `omarchy-webapp-theme` | 0.3.6-1 | Theme Slack, Discord, GitHub et al. to match Omarchy |
 | `omawrite` | 0.5.0-1 | Markdown writing app — bound to `SUPER + SHIFT + W` |
 | `openai-codex-desktop` | 26.820.80927-1 | ChatGPT desktop app with Codex |
-| `tensaku` | 0.26.7-1 | Screenshot annotation for Wayland |
+| `tensaku` | 0.28.0-1 | Screenshot annotation for Wayland |
 | `ttf-ia-writer` | 20181225-1 | iA Writer font subset |
 | `ttfx` | 0.3.2-1 | Terminal text effects, static binary |
 | `tzupdate` | 3.1.0-1 | Set timezone from IP geolocation |
