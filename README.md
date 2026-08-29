@@ -26,7 +26,7 @@ changes. Packages come from three places:
 
 | Package | Version | Provides |
 |---------|---------|----------|
-| `aether` | 4.29.7-1 | Wallpaper-driven desktop theming |
+| `aether` | 4.29.8-1 | Wallpaper-driven desktop theming |
 | `brave-origin-bin` | 1:1.94.117-1 | Minimalist browser from the Brave team |
 | `cliamp` | 1.63.2-1 | Retro terminal music player |
 | `dotnet-host-bin` | 10.0.11.sdk400-1 | .NET CLI driver |
