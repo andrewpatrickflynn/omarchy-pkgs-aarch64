@@ -51,6 +51,7 @@ changes. Packages come from three places:
 | `ufw-docker` | 251123-1 | Fix the Docker/UFW security flaw |
 | `xdg-terminal-exec` | 0.14.3-1 | Launch desktop apps with `Terminal=true` |
 | `yaru-icon-theme` | 26.04.5.1ubuntu-1 | Yaru default Ubuntu icon theme |
+| `yay` | 13.0.1-1 | Pacman wrapper and AUR helper |
 
 ## Usage
 
@@ -100,7 +101,7 @@ The packages differ only in where they can be built:
 |-------|-------|-----------|
 | `any` — `arch=('any')`, architecture-independent | 6 | yes |
 | `repack` — ships a vendor-prebuilt ARM binary | 9 | yes |
-| `compile` — built from source | 10 | yes |
+| `compile` — built from source | 11 | yes |
 
 Two packages in the repo are deliberately **not** automated, and say so in
 `packages.json` rather than being silently absent. Both are built from
