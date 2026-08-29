@@ -78,6 +78,26 @@ for base in "${oma_bases[@]:-}"; do
   done < <(jq -r --arg b "$base" '.[] | select(.pkgbase == $b) | .name' "$work/scope.json")
 done
 
+# --- upstream versions: in-tree PKGBUILDs (source "local") ------------------
+# "Upstream" here is this repo's own pkgbuilds/ tree: a bump lands as an edit
+# to the PKGBUILD, and this comparison against the published db picks it up.
+mapfile -t local_bases < <(jq -r '.[] | select(.source == "local") | .pkgbase' "$work/scope.json" | sort -u)
+for base in "${local_bases[@]:-}"; do
+  [[ -n "$base" ]] || continue
+  pkgbuild="pkgbuilds/$base/PKGBUILD"
+  log "Reading in-tree $pkgbuild"
+  [[ -f "$pkgbuild" ]] || die "no in-tree PKGBUILD at $pkgbuild"
+  epoch=$(sed -nE "s/^epoch=['\"]?([^'\"#]+)['\"]?.*/\1/p"  "$pkgbuild" | head -1)
+  pkgver=$(sed -nE "s/^pkgver=['\"]?([^'\"#]+)['\"]?.*/\1/p" "$pkgbuild" | head -1)
+  pkgrel=$(sed -nE "s/^pkgrel=['\"]?([^'\"#]+)['\"]?.*/\1/p" "$pkgbuild" | head -1)
+  [[ -n "$pkgver" && -n "$pkgrel" ]] || die "could not parse pkgver/pkgrel for $base"
+  ver="$pkgver-$pkgrel"
+  [[ -n "$epoch" ]] && ver="$epoch:$ver"
+  while read -r name; do
+    printf '%s\t%s\n' "$name" "$ver" >> "$work/upstream.tsv"
+  done < <(jq -r --arg b "$base" '.[] | select(.pkgbase == $b) | .name' "$work/scope.json")
+done
+
 # --- compare ----------------------------------------------------------------
 : > "$work/needs-update.txt"
 printf '%-38s %-24s %-24s %s\n' PACKAGE PUBLISHED UPSTREAM STATUS

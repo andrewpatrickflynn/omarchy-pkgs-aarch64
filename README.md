@@ -13,7 +13,7 @@ pointing at binaries that can't be installed. `SUPER + CTRL + Q` (calculator)
 and `SUPER + SHIFT + W` (writer) are the visible casualties.
 
 Nothing is patched here. Sources are unmodified; only the build architecture
-changes. Packages come from three places:
+changes. Packages come from four places:
 
 - **Omarchy's own repo** ([omacom-io/omarchy-pkgs](https://github.com/omacom-io/omarchy-pkgs)),
   built with that repo's tooling, which already supports ARM:
@@ -21,6 +21,13 @@ changes. Packages come from three places:
 - **The AUR**, built with `makepkg` from the published PKGBUILD.
 - **`any`-architecture packages**, which need no rebuild at all — the AUR
   artifact is reused as-is.
+- **In-tree PKGBUILDs** ([`pkgbuilds/`](pkgbuilds), `source: local` in
+  `packages.json`), for software that exists nowhere in a form an aarch64
+  build can use. Currently only `obs-studio`: absent from Arch Linux ARM
+  entirely, and every AUR pkgbase hardcodes obsproject's prebuilt CEF browser
+  bundle, which is published for x86_64 only. Ours builds upstream's
+  unmodified release sources with `ENABLE_BROWSER=OFF` — no browser
+  source/dock, everything else enabled.
 
 ## Packages
 
@@ -37,6 +44,7 @@ changes. Packages come from three places:
 | `hyprland-preview-share-picker-git` | 0.2.1.r16.g0ef9b30-1 | Share picker with window/monitor previews |
 | `localsend` | 1.18.2-1 | Cross-platform AirDrop alternative |
 | `mise-bin` | 2026.8.14-4 | Dev tools, env vars, task runner |
+| `obs-studio` | 32.2.2-1 | Video recording and live streaming (no browser source) |
 | `obsidian-appimage` | 1.12.7-1 | Markdown knowledge base (AppImage) |
 | `omacalc` | 0.2.2-1 | Calculator — bound to `SUPER + CTRL + Q` |
 | `omacut` | 0.4.0-1 | Video length trimmer |
@@ -101,7 +109,7 @@ The packages differ only in where they can be built:
 |-------|-------|-----------|
 | `any` — `arch=('any')`, architecture-independent | 6 | yes |
 | `repack` — ships a vendor-prebuilt ARM binary | 9 | yes |
-| `compile` — built from source | 11 | yes |
+| `compile` — built from source | 12 | yes |
 
 Two packages in the repo are deliberately **not** automated, and say so in
 `packages.json` rather than being silently absent. Both are built from
@@ -128,7 +136,8 @@ stale by construction, so a version diff can never trigger it. It rebuilds on a
 
 [`packages.json`](packages.json) records which group each package belongs to and
 where its PKGBUILD comes from — the AUR for most, `omacom-io/omarchy-pkgs` for
-the five that aren't in the AUR. The source is per-package on purpose: for
+the five that aren't in the AUR, and this repo's own `pkgbuilds/` for
+`obs-studio`. The source is per-package on purpose: for
 `omarchy-emacs` the AUR leads Omarchy's own repo, so switching it would be a
 downgrade.
 

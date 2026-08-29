@@ -6,7 +6,7 @@
 #
 # Env:
 #   PKGBASE     pkgbase to build
-#   SOURCE      aur | omarchy-pkgs
+#   SOURCE      aur | omarchy-pkgs | local
 #   CATEGORY    any | repack
 #   PKGNAMES    comma-separated pkgnames to keep (a split pkgbase builds more)
 #   OUTDIR      where to stage the kept artifacts
@@ -80,6 +80,13 @@ case "$SOURCE" in
     [[ -f "$work/oma/pkgbuilds/$PKGBASE/PKGBUILD" ]] \
       || die "no PKGBUILD at pkgbuilds/$PKGBASE"
     mv "$work/oma/pkgbuilds/$PKGBASE" "$src"
+    ;;
+  local)
+    # PKGBUILDs this repo carries itself, for packages that exist nowhere in a
+    # form an aarch64 build can use (see packages.json for the why per package).
+    log "Copying in-tree pkgbuilds/$PKGBASE"
+    [[ -f "pkgbuilds/$PKGBASE/PKGBUILD" ]] || die "no PKGBUILD at pkgbuilds/$PKGBASE"
+    cp -r "pkgbuilds/$PKGBASE" "$src"
     ;;
   *) die "unknown source '$SOURCE'" ;;
 esac

@@ -107,8 +107,13 @@ dupes="$(jq -r '.packages | group_by(.name) | map(select(length > 1)) | length' 
 is "no duplicate package names" "$dupes" '0'
 bad="$(jq -r '.packages | map(select(.category as $c | ["any","repack","compile"] | index($c) | not)) | length' packages.json)"
 is "every category is known"    "$bad" '0'
-badsrc="$(jq -r '.packages | map(select(.source as $s | ["aur","omarchy-pkgs","omarchy-mac"] | index($s) | not)) | length' packages.json)"
+badsrc="$(jq -r '.packages | map(select(.source as $s | ["aur","omarchy-pkgs","omarchy-mac","local"] | index($s) | not)) | length' packages.json)"
 is "every source is known"      "$badsrc" '0'
+nolocal=0
+while read -r base; do
+  [[ -f "pkgbuilds/$base/PKGBUILD" ]] || nolocal=$((nolocal+1))
+done < <(jq -r '.packages | map(select(.source == "local")) | .[].pkgbase' packages.json | sort -u)
+is "every local source has an in-tree PKGBUILD" "$nolocal" '0'
 
 echo
 if (( fail )); then

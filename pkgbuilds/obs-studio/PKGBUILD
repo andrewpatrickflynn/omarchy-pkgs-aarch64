@@ -1,0 +1,118 @@
+# OBS Studio for aarch64, built from upstream's release Sources tarball.
+#
+# Why this is an in-tree PKGBUILD and not an AUR one: obs-studio is absent
+# from Arch Linux ARM entirely, and every AUR pkgbase (obs-studio-liberty,
+# obs-studio-tytan652, obs-studio-git, ...) hardcodes obsproject's prebuilt
+# CEF bundle for the browser dock, which is published for linux x86_64 only.
+# There is no aarch64 CEF to substitute, so this build sets ENABLE_BROWSER=OFF
+# — no browser source/dock — and enables everything else. The source tarball
+# is upstream's own release artifact with submodules bundled, unmodified.
+#
+# The x86-only encoder plugins (obs-nvenc, obs-qsv11) exclude themselves via
+# upstream's own architecture gates; nothing needs to be disabled here.
+#
+# Version bumps are edits to this file: update pkgver and sha512sums.
+
+pkgname=obs-studio
+pkgver=32.2.2
+pkgrel=1
+pkgdesc="Free and open source software for video recording and live streaming (without the x86-only CEF browser source)"
+arch=('aarch64')
+url="https://obsproject.com"
+license=('GPL-2.0-or-later')
+depends=(
+  'alsa-lib'
+  'curl'
+  'ffmpeg>=8'
+  'fontconfig'
+  'freetype2'
+  'gcc-libs'
+  'glib2'
+  'glibc'
+  'jack'
+  'jansson'
+  'libdatachannel>=0.24.3' # WebRTC/WHIP output
+  'libfdk-aac'
+  'libgl'
+  'libjuice'
+  'libpipewire'
+  'libpulse'
+  'librist' # MPEGTS output
+  'libva'
+  'libx11'
+  'libxcb'
+  'libxcomposite'
+  'libxkbcommon'
+  'luajit' # Lua scripting
+  'mbedtls3>=3.6.1'
+  'pciutils'
+  'python>=3.14' # Python scripting
+  'qrcodegencpp-cmake' # obs-websocket connect QR code
+  'qt6-base>=6.8'
+  'qt6-svg'
+  'qt6-wayland'
+  'rnnoise'
+  'sndio'
+  'speexdsp'
+  'srt' # MPEGTS output
+  'systemd-libs'
+  'util-linux-libs'
+  'v4l-utils'
+  'wayland'
+  'x264'
+  'zlib'
+)
+makedepends=(
+  'asio' # header-only, obs-websocket
+  'cmake'
+  'extra-cmake-modules'
+  'nlohmann-json' # header-only, obs-websocket and plugin manager
+  'simde' # header-only, SIMD portability layer libobs uses on ARM
+  'swig' # scripting bindings
+  'uthash' # header-only, libobs
+  'vlc' # VLC source plugin builds against libvlc headers, dlopens at runtime
+  'websocketpp' # header-only, obs-websocket
+)
+optdepends=(
+  'vlc: VLC media source'
+  'v4l2loopback-dkms: V4L2 virtual camera output'
+)
+source=("https://github.com/obsproject/obs-studio/releases/download/$pkgver/OBS-Studio-$pkgver-Sources.tar.gz")
+sha512sums=('6346b5bff255c9178ef57296489af11bc6949076b4084d3dff8d3da923c8b0d2ab64edb312629c54b8d4be1510bb4166b92838a8c6c2db55a7ee9e08108166de')
+
+build() {
+  local cmake_options=(
+    -S "obs-studio-$pkgver-sources"
+    -B build
+    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_INSTALL_PREFIX=/usr
+    -DCMAKE_INSTALL_LIBDIR=lib
+    -DENABLE_BROWSER=OFF # no linux-aarch64 CEF exists
+    -DENABLE_AJA=OFF # libajantv2 is not in ALARM
+    -DENABLE_LIBFDK=ON
+    -DENABLE_JACK=ON
+    -DENABLE_SNDIO=ON
+    -DENABLE_VLC=ON
+    -DENABLE_WAYLAND=ON
+
+    # The tarball has no .git for the version machinery to read.
+    -DOBS_VERSION_OVERRIDE="$pkgver"
+    -DOBS_COMPILE_DEPRECATION_AS_WARNING=ON
+
+    # Arch ships mbedtls 3 side-by-side under /usr/lib/mbedtls3, and OBS's
+    # finder needs to be pointed at it (same paths the AUR pkgbases use).
+    -DMbedTLS_DIR=/usr/lib/mbedtls3/cmake/MbedTLS
+    -DMbedTLS_INCLUDE_DIR=/usr/include/mbedtls3
+    -DMbedtls_LIBRARY=/usr/lib/mbedtls3/libmbedtls.so
+    -DMbedcrypto_LIBRARY=/usr/lib/mbedtls3/libmbedcrypto.so
+    -DMbedx509_LIBRARY=/usr/lib/mbedtls3/libmbedx509.so
+
+    -Wno-dev
+  )
+  cmake "${cmake_options[@]}"
+  cmake --build build
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+}
